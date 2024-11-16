@@ -2,8 +2,8 @@ import pandas as pd
 from typing import List, Dict
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.docstore.document import Document
-# import chromadb
-# from chromadb.utils import embedding_functions
+import chromadb
+from chromadb.utils import embedding_functions
 import hashlib
 
 class NugenEmbeddingFunction():
@@ -58,13 +58,13 @@ class CSVRAGBot:
         self.text_columns = text_columns
 
         self.embedding_function = NugenEmbeddingFunction(api_token=api_token)
-        # self.db = chromadb.PersistentClient(path="./chroma_db")
-        # self.collection = self.db.create_collection(
-        #     name="csv_collection",
-        #     embedding_function=embedding_functions.SentenceTransformerEmbeddingFunction(
-        #         model_name="all-mpnet-base-v2"
-        #     )
-        # )
+        self.db = chromadb.PersistentClient(path="./chroma_db")
+        self.collection = self.db.create_collection(
+            name="csv_collection",
+            embedding_function=embedding_functions.SentenceTransformerEmbeddingFunction(
+                model_name="all-mpnet-base-v2"
+            )
+        )
     
     def load_csv(self) -> pd.DataFrame:
         """Load CSV file into pandas DataFrame"""
