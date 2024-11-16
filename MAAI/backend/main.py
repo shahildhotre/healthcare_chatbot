@@ -1,46 +1,16 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from pydantic import BaseModel
-from typing import List
-from groq import Groq
-import os
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
-
-# Initialize Groq client
-client = Groq(api_key="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")
-
-# Set model parameters
-MODEL = "mixtral-8x7b-32768"
+from message import process_user_query 
 
 app = FastAPI()
 
-class Message(BaseModel):
-    role: str
-    content: str
-
 class ChatRequest(BaseModel):
-    messages: List[Message]
+    message: str
 
 @app.post("/chat")
-async def chat_endpoint(chat_request: ChatRequest):
-    try:
-        messages = [{"role": msg.role, "content": msg.content} for msg in chat_request.messages]
-        
-        response = client.chat.completions.create(
-            model=MODEL,
-            messages=messages,
-            temperature=0.7,
-        )
-        
-        return {"response": response.choices[0].message.content}
-    except Exception as e:
-        print(f"Error in chat endpoint: {str(e)}")  # For debugging
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error processing chat request: {str(e)}"
-        )
+async def chat(request: ChatRequest):
+    response = process_user_query(request.message)
+    return {"response": response}
 
 # Add a health check endpoint
 @app.get("/health")
