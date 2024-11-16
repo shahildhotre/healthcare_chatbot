@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Initialize Groq client
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+client = Groq(api_key="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")
 
 # Set model parameters
 MODEL = "mixtral-8x7b-32768"
