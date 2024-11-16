@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from message import process_user_query 
+from message2 import process_user_query 
 
 app = FastAPI()
 
