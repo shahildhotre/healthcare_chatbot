@@ -123,8 +123,10 @@ NUGEN_API_URL = "https://api.nugen.in/inference/embeddings"
 
 
 def get_nugen_embeddings(texts, dimensions=123):
+    print("Input texts:", texts)  # Debug print
+    
     payload = {
-        "input": texts,
+        "input": texts[0],
         "model": "nugen-flash-embed",
         "dimensions": dimensions
     }
@@ -132,20 +134,23 @@ def get_nugen_embeddings(texts, dimensions=123):
         "Authorization": f"Bearer {NUGEN_API_KEY}",
         "Content-Type": "application/json"
     }
+    
+    print("Sending request to Nugen API...")  
+    print(payload)# Debug print
     response = requests.post(NUGEN_API_URL, json=payload, headers=headers)
-
+    print("Response status:", response.status_code)  # Debug print
+    
     if response.status_code == 200:
-        # Print response for debugging
-        print("API Response:", response.json())
-        # Get the data from the response - adjust this based on actual API response structure
         data = response.json()
-        if 'data' in data:  # Most APIs nest the results under a 'data' key
-            return data['data']
-        return data  # Return the full response if no 'data' key
+        print("API Response:", data)  # Debug print
+        
+        if 'data' in data:
+            embeddings = [item['embedding'] for item in data['data']]
+            print("Extracted embeddings length:", len(embeddings))  # Debug print
+            return embeddings if len(embeddings) > 1 else embeddings[0]
     else:
-        print("Error: Unable to fetch embeddings from Nugen API.")
-        print("Status Code:", response.status_code)
-        print("Response:", response.text)
+        print(f"Error: {response.status_code}")
+        print(f"Response: {response.text}")
         return []
 
 # Create text representations of all rows
@@ -164,20 +169,41 @@ with open('survey_embeddings.pkl', 'wb') as f:
 
 # Update query_embeddings function to use Nugen
 def query_embeddings(query, top_k=3):
+    print("Query:", query)  # Debug print
+    
     # Load saved embeddings and documents
+    print("Loading saved embeddings...")  # Debug print
     with open('survey_embeddings.pkl', 'rb') as f:
         data = pickle.load(f)
         embeddings = data['embeddings']
         documents = data['documents']
+    print("Loaded embeddings shape:", embeddings.shape if hasattr(embeddings, 'shape') else "not a numpy array")  # Debug print
     
-    # Get Nugen embedding for the query instead of using SentenceTransformer
-    query_embedding = get_nugen_embeddings([query])[0]
+    # Get query embedding
+    print("Getting query embedding...")  # Debug print
+    query_embedding = get_nugen_embeddings([query])
+    print("Query embedding type:", type(query_embedding))  # Debug print
+    print("Query embedding shape/length:", 
+          query_embedding.shape if hasattr(query_embedding, 'shape') 
+          else len(query_embedding) if isinstance(query_embedding, list) 
+          else "unknown")  # Debug print
+    
+    # Ensure query_embedding is 2D
     query_embedding = np.array(query_embedding).astype('float32').reshape(1, -1)
-
+    print("Reshaped query embedding shape:", query_embedding.shape)  # Debug print
+    
+    # Ensure embeddings is 2D numpy array
+    embeddings = np.array(embeddings).astype('float32')
+    if len(embeddings.shape) == 1:
+        embeddings = embeddings.reshape(-1, query_embedding.shape[1])
+    print("Final embeddings shape:", embeddings.shape)  # Debug print
+    
     # Compute similarities
     similarities = cosine_similarity(query_embedding, embeddings)
+    print("Similarities shape:", similarities.shape)  # Debug print
+    
     most_similar_idx = similarities.argsort()[0][-top_k:][::-1]
-
+    
     # Return similar cases
     similar_docs = [(documents[i], similarities[0][i]) for i in most_similar_idx]
     return similar_docs
@@ -188,18 +214,20 @@ def process_user_query(user_message: str):
     
     # Check if best match is below 90%
     best_similarity = top_docs[0][1] * 100
-    if best_similarity < 90:
+    print("Best similarity:", best_similarity)  # Debug print
+    if best_similarity < 70:
         response = "I need more information to find relevant cases. Please provide details about:\n\n"
         response += "• Your gender (male/female)\n"
         response += "• Any symptoms you're experiencing (like coughing, chest pain, breathing issues)\n"
         response += "• Other relevant factors (anxiety, peer pressure, chronic diseases)\n\n"
-        response += "(low confidence):\n\n"
+        response += f"(low confidence).\n\n"
     else:
-        response = "Here are the most similar cases from our database:\n\n"
+        response = f"You are towards high confidence of having lung cancer. Please consult a doctor for further evaluation.\n\n"
     
     # Add matching cases
-    # for doc, sim in top_docs:
-    #     response += f"\n"
+    for doc, sim in top_docs:
+        response += "This is how past cases similar to you were diagnosed:\n"
+        response += f"\n {doc}"
     
     return response
 
