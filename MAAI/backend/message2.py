@@ -7,6 +7,8 @@ from sentence_transformers import SentenceTransformer
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 import requests
+import httpx
+import json
 
 # Load the Kaggle dataset
 df = pd.read_csv("survey lung cancer.csv")
@@ -216,11 +218,30 @@ def process_user_query(user_message: str):
     best_similarity = top_docs[0][1] * 100
     print("Best similarity:", best_similarity)  # Debug print
     if best_similarity < 70:
-        response = "I need more information to find relevant cases. Please provide details about:\n\n"
-        response += "• Your gender (male/female)\n"
-        response += "• Any symptoms you're experiencing (like coughing, chest pain, breathing issues)\n"
-        response += "• Other relevant factors (anxiety, peer pressure, chronic diseases)\n\n"
-        response += f"(low confidence).\n\n"
+        # Call Groq to get a more detailed response
+        prompt = f"""
+        The user has provided insufficient information for a lung cancer risk assessment. 
+        Generate a friendly response asking for more details about:
+        1. Their gender
+        2. Any symptoms they're experiencing
+        3. Relevant lifestyle factors and medical history
+        Keep the response concise but informative.
+        ask something which is not available in the {user_message}
+        also try to get the language from the {user_message} and give output in marathi language
+        """
+        groq_response = call_groq(prompt)
+
+        print("Groq response:", groq_response)  # Debug print
+        
+        # Fallback to default response if Groq fails
+        if groq_response.startswith("Error:"):
+            response = "I need more information to find relevant cases. Please provide details about:\n\n"
+            response += "• Your gender (male/female)\n"
+            response += "• Any symptoms you're experiencing (like coughing, chest pain, breathing issues)\n"
+            response += "• Other relevant factors (anxiety, peer pressure, chronic diseases)\n\n"
+            response += "(low confidence).\n\n"
+        else:
+            response = groq_response + "\n\n(low confidence)\n\n"       
     else:
         response = f"You are towards high confidence of having lung cancer. Please consult a doctor for further evaluation.\n\n"
     
@@ -232,67 +253,67 @@ def process_user_query(user_message: str):
     return response
 
 
-# ef call_groq(prompt: str) -> str:
-#     """
-#     Call Groq API to generate a response based on the given prompt.
+def call_groq(prompt: str) -> str:
+    """
+    Call Groq API to generate a response based on the given prompt.
     
-#     Args:
-#         prompt (str): The prompt to send to Groq
+    Args:
+        prompt (str): The prompt to send to Groq
         
-#     Returns:
-#         str: Generated response from Groq, or a fallback message if the API call fails
-#     """
-#     # Load environment variables
-#     load_dotenv()
+    Returns:
+        str: Generated response from Groq, or a fallback message if the API call fails
+    """
+    # Load environment variables
     
-#     # Get API key from environment variables
-#     api_key = "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"
-#     if not api_key:
-#         return "Error: GROQ_API_KEY not found in environment variables."
+    # Get API key from environment variables
+    api_key = "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"
+    if not api_key:
+        return "Error: GROQ_API_KEY not found in environment variables."
 
-#     # API endpoint
-#     url = "https://api.groq.com/v1/chat/completions"
+    # API endpoint
+    url = "https://api.groq.com/openai/v1/chat/completions"
     
-#     # Request headers
-#     headers = {
-#         "Authorization": f"Bearer {api_key}",
-#         "Content-Type": "application/json"
-#     }
+    # Request headers
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
     
-#     # Request payload
-#     data = {
-#         "model": "mixtral-8x7b-32768",
-#         "messages": [
-#             {
-#                 "role": "system",
-#                 "content": "You are a helpful medical assistant. Keep responses concise and friendly."
-#             },
-#             {
-#                 "role": "user",
-#                 "content": prompt
-#             }
-#         ],
-#         "temperature": 0.7,
-#         "max_tokens": 500
-#     }
+    # Request payload
+    data = {
+        "model": "mixtral-8x7b-32768",
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a helpful medical assistant. Keep responses concise and friendly."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        "temperature": 0.7,
+        "max_tokens": 500
+    }
     
-#     try:
-#         # Make the API call with a timeout
-#         with httpx.Client(timeout=30.0) as client:
-#             response = client.post(url, headers=headers, json=data)
-#             response.raise_for_status()  # Raise an exception for bad status codes
+    try:
+        # Make the API call with a timeout
+        with httpx.Client(timeout=30.0) as client:
+            response = client.post(url, headers=headers, json=data)
+            response.raise_for_status()  # Raise an exception for bad status codes
             
-#             # Parse the response
-#             result = response.json()
-#             return result['choices'][0]['message']['content']
+            # Parse the response
+            result = response.json()
+            print("Groq result:", result)  # Debug print
+            return result['choices'][0]['message']['content']
             
-#     except httpx.TimeoutException:
-#         return "I apologize, but the response took too long. Please try again."
-#     except httpx.HTTPError as e:
-#         return f"An error occurred while communicating with the API: {str(e)}"
-#     except json.JSONDecodeError:
-#         return "Error: Received invalid response from the API."
-#     except KeyError:
-#         return "Error: Unexpected response format from the API."
-#     except Exception as e:
-#         return f"An unexpected error occurred: {str(e)}"
+    except httpx.TimeoutException:
+        return "I apologize, but the response took too long. Please try again."
+    except httpx.HTTPError as e:
+        return f"An error occurred while communicating with the API: {str(e)}"
+    except json.JSONDecodeError:
+        return "Error: Received invalid response from the API."
+    except KeyError:
+        return "Error: Unexpected response format from the API."
+    except Exception as e:
+        return f"An unexpected error occurred: {str(e)}"
